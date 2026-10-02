@@ -1,0 +1,113 @@
+openapi: 3.0.3
+info:
+  title: DCS API
+  version: 1.0.0
+  description: API-first du Document Control System. DCS reste system of record du lifecycle.
+servers:
+  - url: http://localhost:3001/api/v1
+paths:
+  /documents:
+    get:
+      summary: Rechercher documents (métadonnées structurées)
+      parameters:
+        - {name: family, in: query, schema: {type: string}}
+        - {name: type_code, in: query, schema: {type: string}}
+        - {name: state, in: query, schema: {type: string}}
+        - {name: client_id, in: query, schema: {type: string}}
+        - {name: q, in: query, schema: {type: string}}
+      responses:
+        '200': {description: Liste paginée}
+    post:
+      summary: Créer un document (référence allouée transactionnellement)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type_code, title]
+              properties:
+                type_code: {type: string, example: DO-BIZ-PROPOSAL}
+                title: {type: string}
+                client_id: {type: string, format: uuid}
+                project_id: {type: string, format: uuid}
+      responses:
+        '201': {description: Document créé (draft, rev 0)}
+  /documents/{id}:
+    get: {summary: Détail + révision courante, responses: {'200': {description: OK}}}
+  /documents/{id}/revisions:
+    get: {summary: Timeline révisions + diff, responses: {'200': {description: OK}}}
+    post: {summary: Créer révision (snapshot données), responses: {'201': {description: Créée}}}
+  /documents/{id}/submit-review: {post: {summary: Draft → In Review, responses: {'200': {description: OK}}}}
+  /document-types:
+    get: {summary: Catalogue types, responses: {'200': {description: OK}}}
+  /templates:
+    get: {summary: Templates, responses: {'200': {description: OK}}}
+    post: {summary: Créer template (brouillon), responses: {'201': {description: Créé}}}
+  /template-versions/{id}/publish: {post: {summary: Publier (approved), responses: {'200': {description: OK}}}}
+  /template-versions/{id}/retire: {post: {summary: Retirer (retired, historique rendu), responses: {'200': {description: OK}}}}
+  /clients: {get: {summary: Clients, responses: {'200': {description: OK}}}, post: {summary: Créer client, responses: {'201': {description: Créé}}}}
+  /projects: {get: {summary: Projets, responses: {'200': {description: OK}}}, post: {summary: Créer projet, responses: {'201': {description: Créé}}}}
+  /workflows/{instanceId}/actions:
+    post:
+      summary: Décision workflow (approve, request_changes, reject…)
+      responses: {'200': {description: Transition enregistrée + audit}}
+  /approvals/inbox:
+    get: {summary: Files opérationnelles (review/approval/signature), responses: {'200': {description: OK}}}
+  /signatures/requests:
+    post: {summary: Demander signature (rôle), responses: {'201': {description: Demandée}}}
+  /signatures/{requestId}/complete:
+    post: {summary: Compléter signature (hash artefact), responses: {'200': {description: OK}}}
+  /artifacts:
+    post: {summary: Générer artefact PDF/DOCX (pré-contrôles), responses: {'201': {description: Généré}}}
+  /artifacts/{id}/download:
+    get: {summary: Download sécurisé (audité), responses: {'200': {description: Fichier}}}
+  /audit-events:
+    get: {summary: Audit (append-only, filtré par document), responses: {'200': {description: OK}}}
+  /certificates:
+    get: {summary: Certificats émis, responses: {'200': {description: OK}}}
+  /certificates/{no}:
+    get: {summary: Détail + statut effectif, responses: {'200': {description: OK}}}
+  /certificates/{no}/revoke:
+    post: {summary: Révoquer (motif obligatoire), responses: {'200': {description: Révoqué}}}
+  /documents/{id}/certificate:
+    post: {summary: Émettre le certificat (famille CERTIFICATE, document émis), responses: {'201': {description: Émis}}}
+  /verification/{no}:
+    get: {summary: Vérification publique sans auth (données minimales, sans audit interne), responses: {'200': {description: OK}}}
+  /documents/{id}/transitions:
+    get: {summary: Actions possibles pour mon rôle, responses: {'200': {description: OK}}}
+  /documents/{id}/transition:
+    post: {summary: Exécuter une transition gardée (état, rôle, motif, SoD), responses: {'200': {description: OK}}}
+  /documents/{id}/workflow:
+    get: {summary: Synthèse décision (état, steps, signatures, historique), responses: {'200': {description: OK}}}
+  /documents/{id}/record:
+    get: {summary: Dossier de preuve (synthèse + vérifications), responses: {'200': {description: OK}}}
+  /documents/{id}/schema:
+    get: {summary: Schéma du formulaire dynamique, responses: {'200': {description: OK}}}
+  /documents/{id}/preview:
+    get: {summary: Pré-contrôles sans PDF, responses: {'200': {description: OK}}}
+  /documents/{id}/diff:
+    get: {summary: Diff entre révisions, responses: {'200': {description: OK}}}
+  /documents/{id}/derive:
+    post: {summary: Document dérivé + lien, responses: {'201': {description: Créé}}}
+  /document-links:
+    post: {summary: Liaison typée, responses: {'201': {description: Créée}}}
+  /customers: {get: {summary: Clients, responses: {'200': {description: OK}}}, post: {summary: Créer client, responses: {'201': {description: Créé}}}}
+  /services: {get: {summary: Services, responses: {'200': {description: OK}}}, post: {summary: Créer service, responses: {'201': {description: Créé}}}}
+  /transactions: {get: {summary: Transactions, responses: {'200': {description: OK}}}, post: {summary: Créer transaction, responses: {'201': {description: Créé}}}}
+  /documents/prefill:
+    get: {summary: Pré-remplissage métier (cas §9), responses: {'200': {description: OK}}}
+  /business/totals:
+    post: {summary: Totaux canoniques, responses: {'200': {description: OK}}}
+  /notifications:
+    get: {summary: Mes notifications, responses: {'200': {description: OK}}}
+components:
+  schemas:
+    Document:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        reference: {type: string, example: DO-BIZ-2026-0042}
+        type_code: {type: string}
+        state: {type: string}
+        current_revision: {type: integer}

@@ -1,0 +1,31 @@
+{
+  "version": "1.1",
+  "note": "DCS v1.0 §6 : pas de lifecycle unique obligatoire - chaque type suit sa workflow_key. Les transitions sensibles exigent reason/comment.",
+  "states": ["draft", "in_review", "changes_requested", "approved", "ready_to_sign", "signed", "issued", "archived", "rejected", "cancelled", "expired", "revoked", "superseded"],
+  "transitions": [
+    {"from": "draft", "to": "in_review", "action": "submit", "roles": ["author", "doc_manager"]},
+    {"from": "in_review", "to": "changes_requested", "action": "request_changes", "roles": ["reviewer", "approver"], "requires_reason": true},
+    {"from": "changes_requested", "to": "draft", "action": "revise", "roles": ["author"]},
+    {"from": "in_review", "to": "approved", "action": "approve", "roles": ["reviewer", "approver"]},
+    {"from": "approved", "to": "ready_to_sign", "action": "generate_final", "roles": ["author", "doc_manager"]},
+    {"from": "ready_to_sign", "to": "signed", "action": "sign", "roles": ["signer"]},
+    {"from": "signed", "to": "issued", "action": "issue", "roles": ["doc_manager", "approver"]},
+    {"from": "issued", "to": "archived", "action": "archive", "roles": ["doc_manager", "admin"]},
+    {"from": "in_review", "to": "rejected", "action": "reject", "roles": ["approver"], "requires_reason": true},
+    {"from": "issued", "to": "revoked", "action": "revoke", "roles": ["admin", "doc_manager"], "requires_reason": true},
+    {"from": "issued", "to": "superseded", "action": "supersede", "roles": ["doc_manager"], "requires_reason": true}
+  ],
+  "workflows": {
+    "official_standard": {"steps": ["prepared_by", "approved_by", "issue"], "separation_of_duties": false},
+    "official_light": {"steps": ["prepared_by", "issue"], "separation_of_duties": false},
+    "business_standard": {"steps": ["prepared_by", "reviewed_by", "approved_by", "issue"], "separation_of_duties": false},
+    "business_light": {"steps": ["prepared_by", "reviewed_by", "issue"], "separation_of_duties": false},
+    "legal_standard": {"steps": ["prepared_by", "authorized_by", "sign", "issue"], "separation_of_duties": true},
+    "legal_strict": {"steps": ["prepared_by", "reviewed_by", "authorized_by", "sign", "issue"], "separation_of_duties": true},
+    "certificate": {"steps": ["prepared_by", "authorized_by", "issue_certificate"], "separation_of_duties": false},
+    "hr_standard": {"steps": ["prepared_by", "authorized_by", "issue"], "separation_of_duties": true},
+    "hr_strict": {"steps": ["prepared_by", "reviewed_by", "authorized_by", "sign", "issue"], "separation_of_duties": true},
+    "finance_standard": {"steps": ["prepared_by", "reviewed_by", "approved_by", "issue"], "separation_of_duties": false},
+    "finance_light": {"steps": ["prepared_by", "issue"], "separation_of_duties": false}
+  }
+}
