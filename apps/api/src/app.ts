@@ -15,6 +15,7 @@ import { computeTotals, checkTxTransition, prefillFields, effectiveStatus, canVi
 import { needsReminder, needsEscalation, autoArchiveDue, webhookPayload } from './automation';
 import nodemailer from 'nodemailer';
 import { DEFAULT_BRANDING, mergeBranding, sanitizeProposal, extractJson, type BrandingWithLogo } from './branding';
+import { SECRETS_AT_REST, SECRET_MASK, encryptAtRest, decryptAtRest, migrateSecretsAtRest } from './secrets';
 import { businessSchema, documentCreateSchema, templateDefinitionSchema } from './validation';
 import { seedAll } from './seed';
 
@@ -343,7 +344,7 @@ const SETTING_DEFAULTS: Record<string, any> = {
 };
 function setting(key: string): any {
   const found = db.settings.find((s) => s.key === key);
-  if (found !== undefined) return found.value;
+  if (found !== undefined) return SECRETS_AT_REST.has(key) ? decryptAtRest(found.value) : found.value;
   if (key === 'autoArchiveAfterDays' && process.env.AUTO_ARCHIVE_AFTER_DAYS !== undefined) return Number(process.env.AUTO_ARCHIVE_AFTER_DAYS);
   return SETTING_DEFAULTS[key];
 }
@@ -381,28 +382,34 @@ app.patch('/api/v1/admin/users/:id', authenticate, requireRoles('admin'), async 
   await save();
   res.json({ data: { id: u.id, email: u.email, displayName: u.displayName, role: u.role, department: u.department ?? null, isActive: u.isActive } });
 });
-// Politiques : lecture admin complète (contient secrets SMTP/IA) ; lecture publique
-// limitée pour les autres rôles (matrice et périmètres seulement, pour l'affichage).
+// Politiques : lecture admin complète (secrets MASQUÉS, jamais renvoyés en clair) ;
+// lecture publique limitée pour les autres rôles (matrice et périmètres seulement).
 app.get('/api/v1/admin/settings', authenticate, (req, res) => {
+  const mask = (k: string, v: any) => (SECRETS_AT_REST.has(k) && v ? SECRET_MASK : v);
   if (req.user!.role === 'admin') {
-    return res.json({ data: Object.fromEntries(Object.keys(SETTING_DEFAULTS).map((k) => [k, setting(k)])) });
+    return res.json({ data: Object.fromEntries(Object.keys(SETTING_DEFAULTS).map((k) => [k, mask(k, setting(k))])) });
   }
   res.json({ data: { permissionMatrix: setting('permissionMatrix'), departmentScopes: setting('departmentScopes') } });
 });
 app.patch('/api/v1/admin/settings', authenticate, requireRoles('admin'), async (req, res) => {
   const p = z.object({ key: z.string(), value: z.any() }).parse(req.body);
   if (!(p.key in SETTING_DEFAULTS)) return res.status(400).json({ error: 'unknown_setting' });
+  // Sentinelle de masque : l'UI renvoie « ******** » si le secret n'a pas été ressaisi — on conserve l'existant.
+  if (SECRETS_AT_REST.has(p.key) && p.value === SECRET_MASK) {
+    return res.json({ data: { [p.key]: SECRET_MASK } });
+  }
   if (p.key === 'departmentScopes') z.record(z.array(z.string())).parse(p.value);
   if (p.key === 'permissionMatrix') z.record(z.array(z.string())).parse(p.value);
   if (p.key === 'smtpPort') z.number().int().min(1).max(65535).parse(p.value);
   if (p.key === 'smtpSecure' || p.key === 'aiEnabled') z.boolean().parse(p.value);
   if (['smtpHost', 'smtpUser', 'smtpPass', 'smtpFrom', 'aiApiKey', 'aiBaseUrl', 'aiModel'].includes(p.key)) z.string().parse(p.value);
+  const stored = SECRETS_AT_REST.has(p.key) && p.value !== '' ? encryptAtRest(String(p.value)) : p.value;
   const existing = db.settings.find((s) => s.key === p.key);
-  if (existing) existing.value = p.value;
-  else db.settings.push({ key: p.key, value: p.value, updatedAt: new Date().toISOString() });
+  if (existing) existing.value = stored;
+  else db.settings.push({ key: p.key, value: stored, updatedAt: new Date().toISOString() });
   await save();
-  await logEvent({ documentId: 'settings', actorId: req.user!.id, actorRole: req.user!.role, eventType: 'settings_changed', changeSummary: `${p.key} = ${['smtpPass', 'aiApiKey'].includes(p.key) ? '••••' : JSON.stringify(p.value)}` });
-  res.json({ data: { [p.key]: setting(p.key) } });
+  await logEvent({ documentId: 'settings', actorId: req.user!.id, actorRole: req.user!.role, eventType: 'settings_changed', changeSummary: `${p.key} = ${SECRETS_AT_REST.has(p.key) ? (p.value ? '••••' : '(vidé)') : JSON.stringify(p.value)}` });
+  res.json({ data: { [p.key]: SECRETS_AT_REST.has(p.key) && stored ? SECRET_MASK : setting(p.key) } });
 });
 
 // ---- SMTP (notifications par email) : config admin, envoi best-effort, test de connexion ----
@@ -1432,4 +1439,8 @@ app.use((err: any, _req: any, res: any, _next: any) => {
   res.status(500).json({ error: 'internal' });
 });
 
-export async function boot() { await seedAll(); }
+export async function boot() {
+  await seedAll();
+  // Sécurité au repos : chiffre les secrets historiquement stockés en clair (une fois).
+  if (migrateSecretsAtRest(db.settings as any).length > 0) await save();
+}

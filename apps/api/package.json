@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "seed": "tsx src/seed-run.ts",
-    "test": "tsc -p tsconfig.json && node dist/tests/test-numbering.js && node dist/tests/test-rbac.js && node dist/tests/test-scope.js && node dist/tests/test-security.js && node dist/tests/test-branding.js && node dist/tests/test-builder.js && node dist/tests/test-workflow.js && node dist/tests/test-inbox.js && node dist/tests/test-evidence.js && node dist/tests/test-business.js && node dist/tests/test-domain.js && node dist/tests/test-automation.js && node dist/tests/test-admin.js"
+    "test": "tsc -p tsconfig.json && node dist/tests/test-numbering.js && node dist/tests/test-rbac.js && node dist/tests/test-scope.js && node dist/tests/test-security.js && node dist/tests/test-secrets.js && node dist/tests/test-branding.js && node dist/tests/test-builder.js && node dist/tests/test-workflow.js && node dist/tests/test-inbox.js && node dist/tests/test-evidence.js && node dist/tests/test-business.js && node dist/tests/test-domain.js && node dist/tests/test-automation.js && node dist/tests/test-admin.js"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.2",

@@ -3,3 +3,7 @@ dist/
 .next/
 *.log
 .env
+
+# Données et artefacts de l'API : jamais dans le dépôt (secrets, documents officiels)
+apps/api/data/
+apps/api/storage/
