@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { db, save, repoRoot } from './store';
 import { seedUsers } from './auth';
 import { DEFAULT_MATRIX } from './workflow';
+import { DEFAULT_BRANDING } from './branding';
 
 // Définitions démo : la source de vérité des formulaires dynamiques (P2).
 const DEMO: Record<string, { name: string; status: 'approved' | 'draft'; definition: any }> = {
@@ -63,7 +64,13 @@ async function seedBusiness() {
   await save();
 }
 
-const SETTING_SEED: Record<string, any> = { autoArchiveAfterDays: 0, reminderIntervalHours: 24, escalationAfterDays: 3, certExpiryWarnDays: 30, permissionMatrix: DEFAULT_MATRIX };
+const SETTING_SEED: Record<string, any> = {
+  autoArchiveAfterDays: 0, reminderIntervalHours: 24, escalationAfterDays: 3, certExpiryWarnDays: 30,
+  permissionMatrix: DEFAULT_MATRIX, departmentScopes: {},
+  branding: DEFAULT_BRANDING,
+  smtpHost: '', smtpPort: 587, smtpSecure: false, smtpUser: '', smtpPass: '', smtpFrom: '',
+  aiEnabled: false, aiApiKey: '', aiBaseUrl: '', aiModel: '',
+};
 
 // Seed : types (upsert) + templates démo + brouillons pour les 52 types + politiques.
 export async function seedAll() {

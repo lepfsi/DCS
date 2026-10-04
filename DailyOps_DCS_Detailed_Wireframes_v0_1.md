@@ -1190,13 +1190,41 @@ Users are not just a flat list of accounts:
     Finance, RH, Juridique, Opérations...);
 -   an Administrator can edit a user's role and department at any
     time, and activate/deactivate accounts;
--   a user can never change their own role or activation state;
--   department membership is the foundation for future scoping rules
-    (e.g. a Finance approver validates financial documents, an HR
-    reviewer only sees HR-domain documents).
+-   a user can never change their own role or activation state.
 
-The workflow defines which steps exist; the matrix defines who holds
-the authority; the department defines the organizational scope.
+### Department scopes (implemented)
+
+In an enterprise context, several departments manipulate different
+document types at different levels of scale and criticality. The
+**Department scopes** matrix maps each department to the document
+domains it may touch:
+
+``` text
+DEPARTMENT SCOPES (editable by Administrator)
+
+              OFFICIAL  BUSINESS  LEGAL  CERTIFICATE  HR  FINANCE
+Direction       (unchecked on a row = access to all domains)
+Technique
+Finance                                          ·              ✓
+RH                                                          ✓
+Juridique                             ✓
+```
+
+Rules:
+
+-   no box checked on a department row = **unrestricted** (all domains);
+-   at least one box checked = the department is restricted to exactly
+    those domains;
+-   scoping applies to visibility (out-of-scope documents are
+    invisible, like restricted ones), document creation and derivation,
+    workflow routing (a Finance approver is never solicited on an HR
+    document) and suggested assignees;
+-   the Administrator always sees everything;
+-   every scope change is an audited `settings_changed` event.
+
+The workflow defines which steps exist; the permission matrix defines
+who holds the authority; the department scope defines the
+organizational perimeter. All three apply (logical AND).
 
 ------------------------------------------------------------------------
 

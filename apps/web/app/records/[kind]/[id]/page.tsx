@@ -34,7 +34,7 @@ export default function RecordDetail({ params }: { params: { kind: string; id: s
     try {
       const r = await api(`/transactions/${params.id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
       setRec(r.data);
-    } catch (e: any) { alert(`Refusé : ${e.message}`); }
+    } catch (e: any) { setErr(`Changement de statut impossible : ${e.message}.`); }
   }
 
   if (err) return <div className="alert-err"><strong>Erreur : </strong>{err}</div>;
@@ -42,7 +42,7 @@ export default function RecordDetail({ params }: { params: { kind: string; id: s
   const title = rec.name ?? rec.fullName ?? rec.title ?? `${rec.kind} ${rec.id.slice(0, 8)}`;
   return (
     <div>
-      <p><a href="/records">Records</a></p>
+      <p><a href="/records" className="link-plain" style={{ fontSize: 13 }}>← Contexte métier</a></p>
       <h1>{title}</h1>
       <p className="subtitle">{params.kind} · {rec.id}</p>
       <div className="card">

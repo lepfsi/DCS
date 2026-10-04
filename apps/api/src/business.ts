@@ -29,6 +29,16 @@ export function canViewDoc(doc: { ownerId: string; confidentiality?: string | nu
   return doc.ownerId === user.id || user.role === 'admin' || user.role === 'doc_manager';
 }
 
+// Périmètre département → domaines documentaires (DCS §14-15).
+// Le scope vit dans le setting 'departmentScopes' (édité par l'admin) : Record<département, familles[]>.
+// Département sans entrée ou liste vide = non restreint. La règle est additive à la confidentialité.
+export function inDepartmentScope(department: string | undefined | null, family: string, scopes: Record<string, string[]> | undefined | null): boolean {
+  if (!department || !scopes) return true;
+  const allowed = scopes[department];
+  if (!allowed || allowed.length === 0) return true;
+  return allowed.includes(family);
+}
+
 // Confidentialité par défaut : HR sensible, le reste interne.
 export function defaultConfidentiality(family: string, typeDefault?: string): string {
   if (typeDefault) return typeDefault;

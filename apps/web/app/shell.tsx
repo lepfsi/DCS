@@ -1,16 +1,31 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Bell, Search, LayoutDashboard, Inbox, FileText, Database, Shapes, Settings, LogOut } from 'lucide-react';
+import { Bell, Search, LayoutDashboard, Inbox, FileText, Files, Building2, FolderKanban, Briefcase, Receipt, Shapes, Palette, Settings, LogOut, FileSignature } from 'lucide-react';
 import { API_BASE, clearToken } from '@/lib/api';
+import { Toaster } from '@/components/ui';
 
+// Navigation cible (spec §28) : groupes courts, les détails vivent dans leur contexte.
 const NAV = [
-  { href: '/', label: 'Overview', Icon: LayoutDashboard },
-  { href: '/inbox', label: 'Inbox', Icon: Inbox },
-  { href: '/documents', label: 'Documents', Icon: FileText },
-  { href: '/records', label: 'Records', Icon: Database },
-  { href: '/templates', label: 'Templates', Icon: Shapes },
-  { href: '/admin', label: 'Administration', Icon: Settings },
+  { group: 'Accueil', items: [
+    { href: '/', label: 'Accueil', Icon: LayoutDashboard },
+    { href: '/inbox', label: 'Inbox', Icon: Inbox },
+    { href: '/documents', label: 'Documents', Icon: FileText },
+    { href: '/library', label: 'Bibliothèque', Icon: Files },
+  ]},
+  { group: 'Contexte', items: [
+    { href: '/records?tab=customers', label: 'Clients', Icon: Building2 },
+    { href: '/records?tab=projects', label: 'Projets', Icon: FolderKanban },
+    { href: '/records?tab=services', label: 'Services', Icon: Briefcase },
+    { href: '/records?tab=transactions', label: 'Transactions', Icon: Receipt },
+  ]},
+  { group: 'Ressources', items: [
+    { href: '/templates', label: 'Modèles', Icon: Shapes },
+    { href: '/branding', label: 'Identité', Icon: Palette },
+  ]},
+  { group: 'Administration', items: [
+    { href: '/admin', label: 'Administration', Icon: Settings },
+  ]},
 ];
 
 function token(): string | null {
@@ -60,7 +75,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [unread, setUnread] = useState(0);
-  const bare = path === '/login' || path.startsWith('/verify');
+  const [search, setSearch] = useState('');
+  const bare = path === '/login' || path.startsWith('/verify') || path.startsWith('/public');
+
+  // Query string courante (pour l'état actif des liens Contexte avec onglet).
+  useEffect(() => { setSearch(window.location.search); }, [path]);
 
   useEffect(() => {
     const t = token();
@@ -83,17 +102,26 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     router.push('/login');
   }
 
-  if (bare) return <main className="content">{children}</main>;
+  if (bare) return <><Toaster /><main className="content">{children}</main></>;
 
   return (
     <div className="shell">
       <aside className="sidebar">
         <div className="brand"><strong>DailyOps</strong><small>DCS - Document Control</small></div>
         <nav className="nav">
-          {NAV.map((n) => (
-            <a key={n.href} href={n.href} className={'navlink' + ((n.href === '/' ? path === '/' : path.startsWith(n.href)) ? ' active' : '')}>
-              <n.Icon size={15} style={{ verticalAlign: -2, marginRight: 8 }} /><span className="lbl">{n.label}</span>
-            </a>
+          {NAV.map((g) => (
+            <div key={g.group} className="navgroup">
+              <span className="navsep">{g.group}</span>
+              {g.items.map((n) => {
+                const [base, query] = n.href.split('?');
+                const active = base === '/' ? path === '/' : path.startsWith(base) && (!query || search.includes(query));
+                return (
+                  <a key={n.href} href={n.href} className={'navlink' + (active ? ' active' : '')}>
+                    <n.Icon size={15} style={{ verticalAlign: -2, marginRight: 8 }} /><span className="lbl">{n.label}</span>
+                  </a>
+                );
+              })}
+            </div>
           ))}
         </nav>
         <div style={{ marginTop: 'auto', padding: 16, fontSize: 11, opacity: 0.6 }}>
@@ -105,16 +133,20 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <header className="topbar">
           <GlobalSearch />
           <div className="topuser">
+            <a href="/signature" title="Ma signature électronique" style={{ color: 'var(--ink)' }} aria-label="Ma signature électronique">
+              <FileSignature size={16} style={{ verticalAlign: -3 }} />
+            </a>
             <a href="/notifications" className="bell" title="Notifications" style={{ color: 'var(--ink)' }}>
               <Bell size={17} />
               {unread > 0 && <span className="count">{unread}</span>}
             </a>
-            <span>{user ? `${user.displayName} (${user.role})` : '...'}</span>
+            <span>{user ? `${user.displayName} (${user.role}${user.department ? ` · ${user.department}` : ''})` : '...'}</span>
             <button className="btn" onClick={logout} title="Logout"><LogOut size={14} /></button>
           </div>
         </header>
         <main className="content">{children}</main>
       </div>
+      <Toaster />
     </div>
   );
 }

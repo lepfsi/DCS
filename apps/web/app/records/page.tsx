@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { api, me } from '@/lib/api';
 import Pager, { paginate } from '../pager';
+import { toast } from '@/components/ui';
 
 const TABS = ['customers', 'people', 'employees', 'projects', 'services', 'transactions', 'relationships'] as const;
 
@@ -52,6 +53,7 @@ function TxForm({ onDone, onError }: { onDone: () => void; onError: (m: string) 
   async function create() {
     try {
       await api('/transactions', { method: 'POST', body: JSON.stringify({ kind, customerId: customerId || undefined, projectId: projectId || undefined, amount: amount === '' ? undefined : Number(amount), currency }) });
+      toast('Transaction créée.');
       onDone();
     } catch (e: any) { onError(e.message); }
   }
@@ -97,7 +99,13 @@ export default function RecordsPage() {
     setTab(t as any); setForm({}); setErr(''); setPage(0);
     api(`/${t}`).then((r) => setRows(r.data)).catch((e) => setErr(e.message));
   }
-  useEffect(() => { load('customers'); me().then((u) => setRole(u.role)).catch(() => {}); }, []);
+  useEffect(() => {
+    // Onglet depuis l'URL (navigation Contexte §28) : Clients, Projets, Services, Transactions.
+    const sp = new URLSearchParams(window.location.search);
+    const t = sp.get('tab');
+    load(t && (TABS as readonly string[]).includes(t) ? t : 'customers');
+    me().then((u) => setRole(u.role)).catch(() => {});
+  }, []);
   async function create() {
     setErr('');
     const firstKey = (FORMS[tab] ?? [])[0]?.key;
@@ -106,6 +114,7 @@ export default function RecordsPage() {
       const body: any = { ...form };
       if (tab === 'services' && body.unitPrice !== undefined && body.unitPrice !== '') body.unitPrice = Number(body.unitPrice);
       await api(`/${tab}`, { method: 'POST', body: JSON.stringify(body) });
+      toast('Fiche créée.');
       setForm({});
       load(tab);
     } catch (e: any) { setErr(e.message); }
@@ -113,8 +122,8 @@ export default function RecordsPage() {
   const shown = rows.filter((r) => JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));
   return (
     <div>
-      <h1>Records</h1>
-      <p className="subtitle">Business context for document operations. Not a CRM.</p>
+      <h1>Contexte métier</h1>
+      <p className="subtitle">Clients, projets, services et transactions : le contexte d'exécution des documents. Pas un CRM.</p>
       {err && <div className="alert-err"><strong>Erreur : </strong>{err}</div>}
       <div className="tabs">
         {TABS.map((t) => (

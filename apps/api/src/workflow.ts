@@ -25,12 +25,16 @@ export const TRANSITIONS: TransitionDef[] = [
 ];
 
 export interface TransitionCtx {
-  role: string; userId: string; isOwner: boolean;
+  role: string; // rôle principal (messages)
+  roles?: string[]; // rôles effectifs cumulés (défaut : [role])
+  userId: string; isOwner: boolean;
   reason?: string; roleParam?: string;
   workflowSteps: string[]; signatureRoles: string[];
   hasArtifactOnRevision: boolean; hasSignature: boolean;
   existingSignatures: string[]; // rôles déjà signés sur la révision courante
-  permissions: string[]; // autorité du rôle (matrice éditable, défaut ci-dessous)
+  permissions: string[]; // autorités cumulées des rôles (matrice éditable)
+  grantedPermissions?: string[]; // escalades ponctuelles (top management) sur CE document
+  signatureRequired?: boolean; // ce type exige une signature avant émission
 }
 
 // Matrice d'autorité par défaut : qui peut quoi, tous workflows confondus.
@@ -47,14 +51,15 @@ export const DEFAULT_MATRIX: Record<string, string[]> = {
   viewer: ['view'],
 };
 
-const ACTION_PERM: Record<string, string> = {
+export const ACTION_PERM: Record<string, string> = {
   submit: 'edit', request_changes: 'review', revise: 'edit', approve: 'approve', reject: 'approve',
   generate_final: 'edit', sign: 'sign', issue: 'issue', cancel: 'edit', expire: 'edit',
   revoke: 'edit', supersede: 'edit', archive: 'edit',
 };
 
-export function transitionsFor(state: string, role: string): TransitionDef[] {
-  return TRANSITIONS.filter((t) => t.from.includes(state) && (t.roles.includes(role) || role === 'admin'));
+export function transitionsFor(state: string, roleOrRoles: string | string[]): TransitionDef[] {
+  const roles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles];
+  return TRANSITIONS.filter((t) => t.from.includes(state) && (t.roles.some((r) => roles.includes(r)) || roles.includes('admin')));
 }
 
 // États actifs : une échéance dépassée y signale un retard (US-4.4).
@@ -84,19 +89,30 @@ function isStrict(steps: string[]) {
   return steps.includes('authorized_by') || steps.join(',').includes('reviewed_by,authorized_by');
 }
 
+// Garde propriétaire (contrôle d'accès) : un auteur n'agit que sur SES documents.
+// doc_manager et admin conservent la supervision.
+const AUTHOR_OWNER_ONLY = new Set(['submit', 'revise', 'cancel', 'generate_final']);
+
 export function resolveTransition(state: string, action: string, ctx: TransitionCtx): { to: string } {
   const def = TRANSITIONS.find((t) => t.action === action && t.from.includes(state));
   if (!def) {
     const err: any = new Error(`action '${action}' impossible depuis l'état '${state}'`);
     err.status = 409; throw err;
   }
-  if (!def.roles.includes(ctx.role) && ctx.role !== 'admin') {
+  const mine = ctx.roles ?? [ctx.role]; // rôles effectifs cumulés
+  const isAdmin = mine.includes('admin');
+  const granted = ctx.grantedPermissions ?? [];
+  if (!def.roles.some((r) => mine.includes(r)) && !isAdmin && !granted.includes(ACTION_PERM[action] ?? '')) {
     const err: any = new Error(`rôle '${ctx.role}' non autorisé pour '${action}'`);
     err.status = 403; throw err;
   }
   const need = ACTION_PERM[action];
-  if (need && ctx.role !== 'admin' && !ctx.permissions.includes(need)) {
+  if (need && !isAdmin && !ctx.permissions.includes(need) && !granted.includes(need)) {
     const err: any = new Error(`rôle '${ctx.role}' non autorisé pour '${action}' (permission '${need}' requise)`);
+    err.status = 403; throw err;
+  }
+  if (AUTHOR_OWNER_ONLY.has(action) && ctx.role === 'author' && !ctx.isOwner) {
+    const err: any = new Error(`action réservée au responsable du document`);
     err.status = 403; throw err;
   }
   if (def.requiresReason && !(ctx.reason && ctx.reason.trim())) {
@@ -107,9 +123,12 @@ export function resolveTransition(state: string, action: string, ctx: Transition
     const err: any = new Error(`artefact PDF requis sur la révision courante avant '${action}' (générez d'abord)`);
     err.status = 422; throw err;
   }
-  // Émission : les workflows avec étape signature exigent l'état signed.
-  if (action === 'issue' && ctx.workflowSteps.includes('sign') && state !== 'signed') {
-    const err: any = new Error(`émission impossible : signature requise (état actuel '${state}')`);
+  // Émission : les workflows avec étape signature exigent l'état signed ;
+  // les types marqués « signature requise » l'exigent aussi, même sans étape dédiée.
+  if (action === 'issue' && (ctx.workflowSteps.includes('sign') || ctx.signatureRequired) && state !== 'signed') {
+    const err: any = new Error(ctx.signatureRequired && !ctx.workflowSteps.includes('sign')
+      ? `émission impossible : signature électronique requise pour ce type de document`
+      : `émission impossible : signature requise (état actuel '${state}')`);
     err.status = 422; throw err;
   }
   // Signature : rôle param requis, dans les signature_roles du type, non rejoué sur la révision.
@@ -124,7 +143,7 @@ export function resolveTransition(state: string, action: string, ctx: Transition
     }
   }
   // Séparation des devoirs : le owner ne finalise pas un workflow strict.
-  if ((action === 'approve' || action === 'issue') && isStrict(ctx.workflowSteps) && ctx.isOwner && ctx.role !== 'admin') {
+  if ((action === 'approve' || action === 'issue') && isStrict(ctx.workflowSteps) && ctx.isOwner && !isAdmin) {
     const err: any = new Error(`séparation des devoirs : le préparateur ne peut pas '${action}' sur ce type`);
     err.status = 403; throw err;
   }

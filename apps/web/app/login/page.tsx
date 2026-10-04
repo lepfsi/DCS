@@ -96,6 +96,7 @@ export default function LoginPage() {
             ))}
           </div>
           <p className="micro" style={{ marginTop: 12 }}>Un clic remplit le formulaire. Chaque rôle voit ses files et ses actions.</p>
+          <p className="micro" style={{ marginTop: 10 }}><a href="/public">Registre public des documents officiels →</a></p>
         </div>
       </div>
     </div>
