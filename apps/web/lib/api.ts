@@ -29,10 +29,16 @@ export async function api(path: string, opts: RequestInit = {}) {
   }
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
+    let parsed = false;
     try {
       const j = await res.json();
-      if (j && j.error) msg = j.detail ? `${j.error} - ${j.detail}` : j.error;
+      if (j && j.error) { msg = j.detail ? `${j.error} - ${j.detail}` : j.error; parsed = true; }
     } catch { /* corps non JSON */ }
+    // 404 sans erreur structurée = route absente du serveur qui tourne :
+    // l'API doit être relancée sur la dernière version compilée.
+    if (!parsed && res.status === 404) {
+      msg = `HTTP 404 — cette route n'existe pas dans l'API en cours d'exécution. Redémarrez l'API sur la dernière version : dossier apps/api → npm run build puis relancer node dist/src/index.js (ou npm run dev).`;
+    }
     if (msg.includes('invalid_credentials')) msg = 'Email ou mot de passe incorrect.';
     if (res.status === 401 && t && typeof window !== 'undefined' && window.location.pathname !== '/login') {
       clearToken();
